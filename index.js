@@ -130,7 +130,7 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 cron.schedule(
-    '0 0 * * 0',
+    '0 0 * * 0',//Sunday, at 00:00
     async () => {
         console.log('Cron job triggered: Fetching jobs...');
         await processAndStoreJobs();

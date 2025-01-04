@@ -110,7 +110,7 @@ const processAndStoreJobs = async () => {
 };
 
 cron.schedule(
-    '0 0 */2 * *',
+    '0 0 */2 * *',//Alternate Days
     async () => {
         console.log('Cron job triggered: Fetching jobs...');
         await processAndStoreJobs();
