@@ -101,7 +101,7 @@ const processAndStoreJobs = async () => {
 };
 
 cron.schedule(
-    '*/1 * * * *',//'0 0 */2 * *'    
+    '*/15 * * * *',//'0 0 */2 * *'    
     async () => {
         console.log('Cron job triggered: Fetching jobs...');
         await processAndStoreJobs();
