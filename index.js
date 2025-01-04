@@ -37,6 +37,13 @@ connectToDatabase();
 
 app.use(express.json());
 
+const TOP_20_MNCs = [
+    'Google', 'Amazon', 'Microsoft', 'Apple', 'Facebook',
+    'Intel', 'IBM', 'Cisco', 'Oracle', 'SAP',
+    'Samsung', 'Sony', 'Dell', 'Adobe', 'HP',
+    'NVIDIA', 'Salesforce', 'Accenture', 'Infosys', 'TCS'
+];
+
 const fetchJobs = async (params) => {
     try {
         const json = await new Promise((resolve, reject) => {
@@ -62,55 +69,68 @@ const fetchJobs = async (params) => {
         throw error;
     }
 };
-const processAndStoreJobs = async () => {
-    try {
-        console.log('Starting job fetch and store process...');
 
+
+const processAndStoreJobs = async () => {
+
+    console.log('Starting job fetch and store process...');
+    let insertedJobsCount = 0;
+
+    for (const company of TOP_20_MNCs) {
+        console.log(`Fetching jobs for: ${company}`);
         const params = {
             api_key: process.env.SERPAPI_KEY,
             engine: 'google_jobs',
             google_domain: 'google.co.in',
             location: 'India',
-            q: 'Software Engineer Freshers in the last week',
+            q: `Software Engineer ${company}`,
             no_cache: "true"
 
         };
 
-        const json = await fetchJobs(params);
-        const jobsArray = (json.jobs_results || []);
-        const processedJobs = jobsArray.map(job => ({
-            job_id: job.job_id,
-            jobTitle: job.title,
-            companyName: job.company_name,
-            jobLocation: job.location,
-            companyLogo: job.thumbnail || null,
-            postingDate: job.detected_extensions?.posted_at || null,
-            employmentType: job.detected_extensions?.scheduled_type || null,
-            jobUrl: job.apply_options?.[0].link || null,
-        }));
+        try {
+            const json = await fetchJobs(params);
 
-        const insertedJobs = [];
-        for (const job of processedJobs) {
-            try {
-                const insertedJob = await Job.create(job);
-                insertedJobs.push(insertedJob);
-            } catch (err) {
-                if (err.code === 11000) {
-                    console.warn(`Duplicate job_id skipped: ${job.job_id}`);
-                } else {
-                    console.error(`Error inserting job: ${job.job_id}`, err.message);
+            const jobsArray = (json.jobs_results || []);
+            const processedJobs = jobsArray.map(job => ({
+                job_id: job.job_id,
+                jobTitle: job.title,
+                companyName: job.company_name,
+                jobLocation: job.location,
+                companyLogo: job.thumbnail || null,
+                postingDate: job.detected_extensions?.posted_at || null,
+                employmentType: job.detected_extensions?.scheduled_type || null,
+                jobUrl: job.apply_options?.[0].link || null,
+            }));
+
+            for (const job of processedJobs) {
+                try {
+                    await Job.create(job);
+                    insertedJobsCount++;
+                } catch (err) {
+                    if (err.code === 11000) {
+                        console.warn(`Duplicate job_id skipped: ${job.job_id}`);
+                    } else {
+                        console.error(`Error inserting job: ${job.job_id}`, err.message);
+                    }
                 }
             }
         }
+        catch (err) {
+            console.error("Error in fetching jobs for: ", company, "Error: ", err.message);
+            continue;
+        }
 
-        console.log(`${insertedJobs.length} new jobs stored in MongoDB.`);
-    } catch (err) {
-        console.error('Error during job processing:', err.message);
     }
+    console.log(`${insertedJobsCount} new jobs stored in MongoDB.`);
+
 };
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Promise Rejection :: Reason: ', reason);
+});
 
 cron.schedule(
-    '0 0 */2 * *',
+    '0 0 * * 0',
     async () => {
         console.log('Cron job triggered: Fetching jobs...');
         await processAndStoreJobs();
@@ -120,9 +140,6 @@ cron.schedule(
         timezone: 'Asia/Kolkata',
     }
 );
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('Promise Rejection :: Reason: ', reason);
-});
 
 app.get('/', async (req, res) => {
     res.status(200).json({ message: 'Job fetcher service is running.' });
